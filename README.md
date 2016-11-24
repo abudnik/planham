@@ -337,3 +337,21 @@ It is necessary to take into account, that the total number of iterations of the
 [4] B. Vandegriend. Finding Hamiltonian Cycles: Algorithms, Graphs and Performance. Master’s thesis, Univ. of Alberta, Dept. of Computing Science, 1998. <br />
 [5] C. Umans and W. Lenhart, Hamiltonian cycles in solid grid graphs, in Proc. 38th IEEE Symp. Foundations Comput. Sci., Miami Beach, FL, USA, Oct. 20–22, 1997, pp. 496–507, IEEE Comput. Soc., Los Alamitos, USA, 1997. <br />
 [6] B. Yao, C. Ras, H. Mokhtar, An algorithm for finding Hamiltonian Cycles in Cubic Planar Graphs, 11 (2015), arXiv:1512.01324
+
+## Implementation of the algorithm.
+
+We provide a C++ implementation of the algorithm. Building a program from sources:
+
+```Bash
+git clone https://github.com/abudnik/planham.git
+cd planham
+cmake .
+make
+```
+
+Running a program to test a Hamiltonicity of a graph represented by adjacency matrix in file examples/prism17.mat:
+
+```Bash
+./planham -f examples/prism17.mat # use faces merging algorithm only
+./planham -t examples/prism17.mat # use both faces merging and trivial brute-force algorithms
+```
