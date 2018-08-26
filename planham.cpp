@@ -232,7 +232,7 @@ bool is_bipartite(const Graph &g, size_t &part1, size_t &part2) {
 
 struct Face
 {
-	Face(std::vector<size_t> &path)
+	Face(std::vector<size_t> &&path)
 	: vertices(std::move(path)),
 	 uniq_vertices(vertices.begin(), vertices.end()) {
 		std::sort(uniq_vertices.begin(), uniq_vertices.end());
@@ -280,7 +280,7 @@ public:
 			return;
 		}
 
-		const auto faces_order = reorder_faces(0);
+		reorder_faces(0);
 		//for (auto r : faces_order) std::cout << r+1 << ' '; std::cout << std::endl;
 		if (faces_order.size() != dual.get_num_vertices()) {
 			//std::cout << "dual graph isn't connected" << std::endl;
@@ -296,7 +296,7 @@ public:
 		Graph gr(g.get_num_vertices());
 		std::vector<size_t> deg(g.get_num_vertices());
 		std::vector<bool> chosen_faces(dual.get_num_vertices());
-		search_hamiltonian_cycles(gr, chosen_faces, faces_order, 0, deg, 0);
+		search_hamiltonian_cycles(gr, chosen_faces, 0, deg, 0);
 	}
 
 	void print_stats() const {
@@ -308,9 +308,8 @@ public:
 	}
 
 private:
-	void search_hamiltonian_cycles(Graph &gr, std::vector<bool> &chosen_faces,
-				       const std::vector<size_t> &faces_order, size_t index,
-				       std::vector<size_t> &deg, size_t deg_sum) {
+	void search_hamiltonian_cycles(Graph &gr, std::vector<bool> &chosen_faces, size_t index,
+                                 std::vector<size_t> &deg, size_t deg_sum) {
 		++num_iter;
 		//if (num_iter % 1000000 == 0) std::cout << "num_iter: " << num_iter << std::endl;
 
@@ -356,7 +355,7 @@ private:
 			return;
 		}
 
-		if (!check_cycle_connectivity(gr, chosen_faces, faces_order, index)) {
+		if (!check_cycle_connectivity(gr, chosen_faces, index)) {
 			/*for (bool b : chosen_faces) {
 				std::cout << b << ' ';
 			}
@@ -372,14 +371,14 @@ private:
 		apply_face(gr, face, deg, deg_sum, 1);
 		chosen_faces[faces_order[index]] = true;
 		if (!need_stop && check_face_vertices(face, deg)) {
-			search_hamiltonian_cycles(gr, chosen_faces, faces_order, index + 1, deg, deg_sum);
+			search_hamiltonian_cycles(gr, chosen_faces, index + 1, deg, deg_sum);
 		}
 		chosen_faces[faces_order[index]] = false;
 		apply_face(gr, face, deg, deg_sum, -1);
 
 		if (!need_stop && chosen_faces_contain_face_vertices(face)) {
 			increase_vertex_to_number_of_adjacent_faces(face, -1);
-			search_hamiltonian_cycles(gr, chosen_faces, faces_order, index + 1, deg, deg_sum);
+			search_hamiltonian_cycles(gr, chosen_faces, index + 1, deg, deg_sum);
 			increase_vertex_to_number_of_adjacent_faces(face, 1);
 		}
 
@@ -518,7 +517,7 @@ private:
 					for (size_t i = path2.size() - 2; i >= 1; --i) {
 						path1.push_back(path2[i]);
 					}
-					faces_set.emplace(path1);
+					faces_set.emplace(std::move(path1));
 				}
 			}
 		}
@@ -546,8 +545,7 @@ private:
 		return false;
 	}
 
-	std::vector<size_t> reorder_faces(size_t first_face) const {
-		std::vector<size_t> faces_order;
+	void reorder_faces(size_t first_face) {
 		faces_order.reserve(dual.get_num_vertices());
 
 		std::vector<bool> visited(dual.get_num_vertices());
@@ -566,7 +564,6 @@ private:
 				q.push(next);
 			}
 		}
-		return faces_order;
 	}
 
 	void build_face_degree_and_edge_refcnt() {
@@ -593,8 +590,7 @@ private:
 		return true;
 	}
 
-	bool check_cycle_connectivity(const Graph &gr, const std::vector<bool> &chosen_faces,
-				      const std::vector<size_t> &faces_order, size_t index) const {
+	bool check_cycle_connectivity(const Graph &gr, const std::vector<bool> &chosen_faces, size_t index) const {
 		std::vector<bool> visited(dual.get_num_vertices());
 		for (size_t i = 0; i < index; ++i) {
 			if (visited[faces_order[i]]) continue;
@@ -652,6 +648,7 @@ private:
 	Graph edge_to_faces;
 	std::vector<size_t> vertex_to_faces;
 	std::vector<size_t> face_to_faces_order;
+	std::vector<size_t> faces_order;
 	size_t num_iter, num_cycles;
 	bool hamiltonicity_only, need_stop;
 };
