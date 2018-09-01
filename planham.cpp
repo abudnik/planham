@@ -148,10 +148,10 @@ std::vector<size_t> get_shortest_path(const Graph &g, size_t v1, size_t v2) {
 			if (next == v2) {
 				std::vector<size_t> result;
 				while (prev[next] != next) {
-					result.push_back(next);
+					result.emplace_back(next);
 					next = prev[next];
 				}
-				result.push_back(next);
+				result.emplace_back(next);
 				//std::cout << "get_shortest_path: " << v1+1 << ' ' << v2+1 << ' ' << result.size() << std::endl;
 				//for (auto r : result) std::cout << r+1 << ' '; std::cout << std::endl;
 				return result;
@@ -263,6 +263,7 @@ public:
 	 dual(build()),
 	 edge_to_faces(g.get_num_vertices()),
 	 num_iter(0),
+	 max_iter(0),
 	 num_cycles(0),
 	 hamiltonicity_only(hamiltonicity_only),
 	 need_stop(false) {
@@ -280,23 +281,53 @@ public:
 			return;
 		}
 
-		reorder_faces(0);
-		//for (auto r : faces_order) std::cout << r+1 << ' '; std::cout << std::endl;
-		if (faces_order.size() != dual.get_num_vertices()) {
-			//std::cout << "dual graph isn't connected" << std::endl;
-			return;
-		}
-		face_to_faces_order.resize(faces_order.size());
-		for (size_t i = 0; i < faces_order.size(); ++i) {
-			face_to_faces_order[faces_order[i]] = i;
-		}
-
 		build_face_degree_and_edge_refcnt();
 
 		Graph gr(g.get_num_vertices());
 		std::vector<size_t> deg(g.get_num_vertices());
 		std::vector<bool> chosen_faces(dual.get_num_vertices());
-		search_hamiltonian_cycles(gr, chosen_faces, 0, deg, 0);
+
+		face_to_faces_order.resize(dual.get_num_vertices());
+
+		if (hamiltonicity_only) {
+			max_iter = dual.get_num_vertices();
+			while (!need_stop) {
+				max_iter *= 2;
+				//if (max_iter > dual.get_num_vertices() * 8)
+				//  std::cout << "limit is " << max_iter << std::endl;
+				for (size_t first_face = 0; first_face < dual.get_num_vertices(); ++first_face) {
+					reorder_faces(first_face);
+					//for (auto r : faces_order) std::cout << r+1 << ' '; std::cout << std::endl;
+					if (faces_order.size() != dual.get_num_vertices()) {
+						//std::cout << "dual graph isn't connected" << std::endl;
+						return;
+					}
+					for (size_t i = 0; i < faces_order.size(); ++i) {
+						face_to_faces_order[faces_order[i]] = i;
+					}
+
+					num_iter = 0;
+					search_hamiltonian_cycles(gr, chosen_faces, 0, deg, 0);
+
+					need_stop = need_stop || num_iter < max_iter;
+					if (need_stop) {
+						break;
+					}
+				}
+			}
+		} else {
+			reorder_faces(0);
+			//for (auto r : faces_order) std::cout << r+1 << ' '; std::cout << std::endl;
+			if (faces_order.size() != dual.get_num_vertices()) {
+				//std::cout << "dual graph isn't connected" << std::endl;
+				return;
+			}
+			for (size_t i = 0; i < faces_order.size(); ++i) {
+				face_to_faces_order[faces_order[i]] = i;
+			}
+
+			search_hamiltonian_cycles(gr, chosen_faces, 0, deg, 0);
+		}
 	}
 
 	void print_stats() const {
@@ -309,8 +340,13 @@ public:
 
 private:
 	void search_hamiltonian_cycles(Graph &gr, std::vector<bool> &chosen_faces, size_t index,
-                                 std::vector<size_t> &deg, size_t deg_sum) {
+																 std::vector<size_t> &deg, size_t deg_sum) {
+		if (hamiltonicity_only && num_iter > max_iter) {
+			return;
+		}
+
 		++num_iter;
+
 		//if (num_iter % 1000000 == 0) std::cout << "num_iter: " << num_iter << std::endl;
 
 		if (index > 0) {
@@ -515,7 +551,7 @@ private:
 
 				if (is_shortest) {
 					for (size_t i = path2.size() - 2; i >= 1; --i) {
-						path1.push_back(path2[i]);
+						path1.emplace_back(path2[i]);
 					}
 					faces_set.emplace(std::move(path1));
 				}
@@ -538,19 +574,29 @@ private:
 		for (size_t i = 0; i < f1.vertices.size(); ++i) {
 			for (size_t j = 0; j < f2.vertices.size(); ++j) {
 				if (same_edge(f1.vertices[i], f1.vertices[(i+1) % f1.vertices.size()],
-					      f2.vertices[j], f2.vertices[(j+1) % f2.vertices.size()]))
+					     f2.vertices[j], f2.vertices[(j+1) % f2.vertices.size()]))
 					return true;
 			}
 		}
 		return false;
 	}
 
-	void reorder_faces(size_t first_face) {
+	void reorder_faces(const size_t first_face) {
+		if (memoized_faces_order.empty()) {
+			memoized_faces_order.resize(dual.get_num_vertices());
+		}
+
+		if (!memoized_faces_order[first_face].empty()) {
+			faces_order = memoized_faces_order[first_face];
+			return;
+		}
+
+		faces_order.clear();
 		faces_order.reserve(dual.get_num_vertices());
 
 		std::vector<bool> visited(dual.get_num_vertices());
 		std::queue<size_t> q;
-		faces_order.push_back(first_face);
+		faces_order.emplace_back(first_face);
 		visited[first_face] = true;
 		q.push(first_face);
 		while (!q.empty()) {
@@ -560,10 +606,12 @@ private:
 				auto next = adj.get_vertex();
 				if (visited[next]) continue;
 				visited[next] = true;
-				faces_order.push_back(next);
+				faces_order.emplace_back(next);
 				q.push(next);
 			}
 		}
+
+		memoized_faces_order[first_face] = faces_order;
 	}
 
 	void build_face_degree_and_edge_refcnt() {
@@ -602,7 +650,7 @@ private:
 			bool all_neighbor_visited = true;
 			while (!q.empty() && all_neighbor_visited) {
 				const auto v = q.front(); q.pop();
-				face_indexes.push_back(v);
+				face_indexes.emplace_back(v);
 				VertexAdjacent adj(dual, v);
 				while (adj.next()) {
 					auto next = adj.get_vertex();
@@ -647,10 +695,16 @@ private:
 	Graph dual;
 	Graph edge_to_faces;
 	std::vector<size_t> vertex_to_faces;
+
+	std::vector<std::vector<size_t>> memoized_faces_order;
 	std::vector<size_t> face_to_faces_order;
 	std::vector<size_t> faces_order;
-	size_t num_iter, num_cycles;
-	bool hamiltonicity_only, need_stop;
+
+	uint64_t num_iter;
+	uint64_t max_iter;
+	uint64_t num_cycles;
+	const bool hamiltonicity_only;
+	bool need_stop;
 };
 
 class BruteForceHam
